@@ -6,6 +6,6 @@ import (
 )
 
 func main() {
-    fmt.Println("pIRC starting...")
-    pirc.RunServer()
+    fmt.Println("pIRC starting on port 6667...")
+    pirc.RunServer(":6667")
 }
