@@ -45,7 +45,7 @@ func (parser *CmdParser) Parse(buf []byte) (string, *CodePair) {
         }
 
         // Check if command is valid
-        if _, ok := CmdDispatcher[irc_cmd.Cmd]; !ok {
+        if _, ok := CmdDispatcher[strings.ToLower(irc_cmd.Cmd)]; !ok {
             return irc_cmd.Cmd, &ERR.UNKNOWNCOMMAND
         }
 
@@ -54,3 +54,5 @@ func (parser *CmdParser) Parse(buf []byte) (string, *CodePair) {
 }
 
 var CmdDispatcher = make(map[string] func(*IrcCmd) ServerResponse)
+// CmdDispatcher["NICK"] = func(*IrcCmd cmd) ServerResponse {
+    // server.AddUser(
