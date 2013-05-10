@@ -12,9 +12,9 @@ type User struct {
 
 func CreateUser(cmd string, c *net.Conn) (*User, error) {
     index := strings.LastIndex(cmd, " ")
-    if strings.ToUpper(cmd[:index]) != "NICK" {
-        return nil, CmdError{"bad", cmd[:index]}
-    }
+    // if strings.ToUpper(cmd[:index]) != "NICK" {
+    //     return nil, CmdError{"bad", cmd[:index]}
+    // }
 
     u := User{cmd[index+1:], c}
     return &u, nil
