@@ -1,10 +1,10 @@
 package pirc
 
 import (
-    "fmt"
+    // "fmt"
     "log"
     "net"
-    "bytes"
+    // "bytes"
 )
 
 type Server struct {
@@ -31,10 +31,11 @@ func (s *Server) AddUserByNick(nick string, conn *net.Conn) *CodePair {
     return s.AddUser(&u)
 }
 
+var server = new(Server)
+
 func RunServer(listenaddr string) {
-    s := new(Server)
-    s.users = make(map[string] *User)
-    s.Hostname = "localhost"
+    server.users = make(map[string] *User)
+    server.Hostname = "localhost"
     ln, err := net.Listen("tcp", listenaddr)
     if err != nil {
         log.Println(err)
@@ -53,45 +54,21 @@ func RunServer(listenaddr string) {
             log.Println("Connection opened")
         }
 
-        go func(c net.Conn) {
+        go func(conn net.Conn) {
             var buf [1024]byte
-            bytes_read, err := c.Read(buf[0:])
+            bytes_read, err := conn.Read(buf[0:])
             if err != nil {
                 log.Println("Error receiving data.")
                 log.Println(err)
             } else {
-                fmt.Printf("Received input of length %d from %v\n", bytes_read, c.RemoteAddr().String())
-                cmd_term := bytes.IndexAny(buf[0:], "\n")
-                last_term := 0
-                for cmd_term != -1 && last_term < bytes_read {
-                    fmt.Printf("Accessing buf[%d:%d]", last_term, cmd_term)
-                    cmd := buf[last_term:cmd_term]
-                    fmt.Println("Command: " + string(cmd))
-                    fmt.Println("First: " + string(cmd)[:bytes.IndexAny(cmd, " ")])
-
-                    if string(cmd)[:bytes.IndexAny(cmd, " ")] == "NICK" {
-                        var err *CodePair = nil
-                        var u *User
-                        u, _ = CreateUser(string(cmd), &c)
-                        err = s.AddUser(u)
-
-                        if err != nil {
-                            WriteResponse("nick", err, c, s)
-                        } else {
-                            log.Println("Created user " + u.Nick)
-                        }
-                    }
-
-                    last_term = cmd_term + 1
-                    cmd_term = bytes.IndexAny(buf[last_term:], "\n") + last_term
+                log.Printf("Received input of length %d from %v\n", bytes_read, conn.RemoteAddr().String())
+                parser := new(CmdParser)
+                cmd, err := parser.Parse(buf[0:bytes_read])
+                if err != nil {
+                    conn.Write([]byte(err.Response(server, cmd)))
                 }
             }
         }(conn)
     }
-}
-
-func WriteResponse(cmd string, cp *CodePair, c net.Conn, s *Server) {
-    response := fmt.Sprintf(":%v %3d0 %v :%v\r\n", s.Hostname, cp.Code, cmd, cp.Msg)
-    c.Write([]byte(response))
 }
 
