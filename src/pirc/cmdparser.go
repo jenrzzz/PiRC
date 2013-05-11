@@ -70,11 +70,27 @@ func (parser *CmdParser) Parse(buf []byte) error {
             sender = ""
         }
 
-        cmd_split := strings.Split(stripped_cmd, " ")
+        split_cmds := strings.Split(stripped_cmd, " ")
+        parsed_cmds := make([]string, 32)[0:len(split_cmds)]
+
+        // Check if the last command starts with a colon (allows spaces), and
+        // join those args together
+        cmd_count := 0
+        for j, arg := range split_cmds {
+            cmd_count++
+            if arg[0] == ':' {
+                last_arg := strings.Join(split_cmds[j:], " ")
+                parsed_cmds[j] = last_arg[1:]
+                break
+            } else {
+                parsed_cmds[j] = split_cmds[j]
+            }
+        }
+        parsed_cmds = parsed_cmds[0:cmd_count]
 
         irc_cmd := IrcCmd {
-            Cmd: strings.ToUpper(cmd_split[0]),
-            Args: cmd_split[1:],
+            Cmd: strings.ToUpper(parsed_cmds[0]),
+            Args: parsed_cmds[1:],
             Sender: sender,
         }
 
