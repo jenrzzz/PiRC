@@ -4,21 +4,32 @@ import (
     "bytes"
     "strings"
     "log"
+    "fmt"
 )
 
 type IrcCmd struct {
     Cmd string
     Args []string
+    Sender string
 }
 
 type CmdParser struct {
+    Client *IrcConn
     commands []*IrcCmd
+    curr int
 }
 
-func (parser *CmdParser) Parse(buf []byte) (string, *CodePair) {
-    log.Printf("In: %v", buf)
+func (parser *CmdParser) Next() *IrcCmd {
+    if parser.curr < len(parser.commands) {
+        c := parser.commands[parser.curr]
+        parser.curr++
+        return c
+    }
+    return nil
+}
+
+func (parser *CmdParser) Parse(buf []byte) error {
     cmd_list := bytes.Split(buf[0:], []byte("\n"))
-    log.Printf("Split: %v", cmd_list)
 
     // Strip whitespace in case \r\n is sent
     var cmds []string
@@ -35,24 +46,42 @@ func (parser *CmdParser) Parse(buf []byte) (string, *CodePair) {
         }
     }
 
-    for _, c := range cmds {
+    parser.commands = make([]*IrcCmd, len(cmds))
+    var err error = nil
+
+    for i, c := range cmds {
         log.Printf("Got command %v", c)
-        cmd_split := strings.Split(c, " ")
+
+        // Check if command includes the (optional) name of the sending server
+        // Not implemented; just for RFC-1459 compliance
+        var sender string
+        var stripped_cmd string
+        if c[0] == ':' {
+            sender_end := strings.Index(c, " ")
+
+            if sender_end == -1 {
+                err = fmt.Errorf("Unable to parse command %v", c)
+            } else {
+                sender = c[1:sender_end]
+                stripped_cmd = c[sender_end+1:]
+            }
+        } else {
+            stripped_cmd = c
+            sender = ""
+        }
+
+        cmd_split := strings.Split(stripped_cmd, " ")
 
         irc_cmd := IrcCmd {
-            Cmd: cmd_split[0],
+            Cmd: strings.ToUpper(cmd_split[0]),
             Args: cmd_split[1:],
+            Sender: sender,
         }
 
-        // Check if command is valid
-        if _, ok := CmdDispatcher[strings.ToLower(irc_cmd.Cmd)]; !ok {
-            return irc_cmd.Cmd, &ERR.UNKNOWNCOMMAND
-        }
+        parser.commands[i] = &irc_cmd
+        parser.curr = 0
 
     }
-    return "", nil
+    return err
 }
 
-var CmdDispatcher = make(map[string] func(*IrcCmd) ServerResponse)
-// CmdDispatcher["NICK"] = func(*IrcCmd cmd) ServerResponse {
-    // server.AddUser(

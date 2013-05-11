@@ -24,32 +24,22 @@ func (cp CodePair) Response(s *Server, cmd string) string {
     return response
 }
 
+// For replies that need to be formatted with info
+func (cp CodePair) Format(vals ...interface{}) {
+    cp.Msg = fmt.Sprintf(cp.Msg, vals)
+}
+
 // Normal server responses
-type ProtoReply struct {
-    WELCOME CodePair
-    YOURHOST CodePair
-    CREATED CodePair
-    MYINFO CodePair
+var RPL = map[string] CodePair {
+    "WELCOME": CodePair{1, "Welcome to the Internet Relay Chat Network %v!%v@%v"},
+    "YOURHOST": CodePair{2, "Your host is %v, running version %v"},
+    "CREATED": CodePair{3, "This server was created %v"},
+    "MYINFO": CodePair{4, "%v %v %v %v"},
 }
 
-var RPL = ProtoReply {
-    WELCOME: CodePair{1, "Welcome to the Internet Relay Chat Network %v!%v@%v"},
-    YOURHOST: CodePair{2, "Your host is %v, running version %v"},
-    CREATED: CodePair{3, "This server was created %v"},
-    MYINFO: CodePair{4, "%v %v %v %V"},
-}
-
-// Error server responses
-// There's probably a better way to implement these -- I'm bad at Go
-type ProtoError struct {
-    NEEDMOREPARAMS CodePair
-    NICKNAMEINUSE CodePair
-    UNKNOWNCOMMAND CodePair
-}
-
-// Define the actual error codes and messages
-var ERR = ProtoError {
-    UNKNOWNCOMMAND: CodePair{421, "Unknown command"},
-    NICKNAMEINUSE: CodePair{433, "Nickname is already in use"},
-    NEEDMOREPARAMS: CodePair{461, "Not enough parameters"},
+// error codes and messages
+var ERR = map[string] CodePair {
+    "UNKNOWNCOMMAND": CodePair{421, "Unknown command"},
+    "NICKNAMEINUSE": CodePair{433, "Nickname is already in use"},
+    "NEEDMOREPARAMS": CodePair{461, "Not enough parameters"},
 }

@@ -1,40 +1,54 @@
 package pirc
 
 import (
-    // "fmt"
     "log"
     "net"
-    // "bytes"
 )
+
+type IrcConn struct {
+    rwc net.Conn
+    remoteAddr string
+    server *Server
+    body []byte
+}
+
+func (c *IrcConn) Read(b []byte) (n int, err error) {
+    return c.rwc.Read(b)
+}
+
+func (c *IrcConn) Write(b []byte) (n int, err error) {
+    return c.rwc.Write(b)
+}
 
 type Server struct {
     Hostname string
-    users map[string] *User
+    Users map[string] *User
+    Connections map[*IrcConn] *User
     // channels map[string] *Channel
 }
 
-func (s *Server) FindUser(nick string) *User {
-    return s.users[nick]
-}
+// Check if command is valid and dispatch, then write response
+func (s *Server) Dispatch(cmds *CmdParser) {
+    log.Printf("In dispatch with commands %v", cmds.commands)
+    for c := cmds.Next(); c != nil; c = cmds.Next() {
+        log.Printf("Dispatching command %v", *c)
+        var response ServerResponse
+        if cmd_func, exists := CmdDispatcher[c.Cmd]; exists {
+            response = cmd_func(c, cmds.Client)
+        } else {
+            response = ERR["UNKNOWNCOMMAND"]
+        }
 
-func (s *Server) AddUser(u *User) *CodePair {
-     if s.users[u.Nick] != nil {
-        return &ERR.NICKNAMEINUSE
+        if response != nil {
+            cmds.Client.Write([]byte(response.Response(s, c.Cmd)))
+        }
     }
-
-    s.users[u.Nick] = u
-    return (*CodePair)(nil)
-}
-
-func (s *Server) AddUserByNick(nick string, conn *net.Conn) *CodePair {
-    u := User{nick, conn}
-    return s.AddUser(&u)
 }
 
 var server = new(Server)
-
 func RunServer(listenaddr string) {
-    server.users = make(map[string] *User)
+    server.Users = make(map[string] *User)
+    server.Connections = make(map[*IrcConn] *User)
     server.Hostname = "localhost"
     ln, err := net.Listen("tcp", listenaddr)
     if err != nil {
@@ -55,17 +69,20 @@ func RunServer(listenaddr string) {
         }
 
         go func(conn net.Conn) {
-            var buf [1024]byte
-            bytes_read, err := conn.Read(buf[0:])
+            c := IrcConn{conn, conn.RemoteAddr().String(), server, make([]byte, 2048)}
+            bytes_read, err := conn.Read(c.body[0:])
             if err != nil {
                 log.Println("Error receiving data.")
                 log.Println(err)
             } else {
                 log.Printf("Received input of length %d from %v\n", bytes_read, conn.RemoteAddr().String())
                 parser := new(CmdParser)
-                cmd, err := parser.Parse(buf[0:bytes_read])
+                parser.Client = &c
+                err := parser.Parse(c.body[0:bytes_read])
                 if err != nil {
-                    conn.Write([]byte(err.Response(server, cmd)))
+                    log.Printf("Command parse error: %v", err.Error())
+                } else {
+                    server.Dispatch(parser)
                 }
             }
         }(conn)
