@@ -4,6 +4,8 @@ import (
     "log"
     "net"
     "strings"
+    "fmt"
+    "time"
 )
 
 type IrcConn struct {
@@ -22,12 +24,38 @@ func (c *IrcConn) Write(b []byte) (n int, err error) {
     return c.rwc.Write(b)
 }
 
+func (c *IrcConn) WriteRaw(code int, nick string, message string) (n int, err error) {
+    r := fmt.Sprintf(":%v %3d0 %v %v\r\n", c.server.Hostname, code, nick, message)
+    return c.rwc.Write([]byte(r))
+}
+
+func (c *IrcConn) WriteResponse(r ServerResponse, cmd string) (n int, err error) {
+    return c.rwc.Write([]byte(r.Response(c.server, cmd)))
+}
+
+func (c *IrcConn) WriteCmd(cmd string, args []string) (n int, err error) {
+    var r string
+    if args != nil {
+        r = fmt.Sprintf(":%v %v %v\r\n", c.server.Hostname, cmd, strings.Join(args[0:], " "))
+    } else {
+        r = fmt.Sprintf(":%v %v\r\n", c.server.Hostname, cmd)
+    }
+    return c.rwc.Write([]byte(r))
+}
+
+func (c *IrcConn) WriteServerNotice(s string) (n int, err error) {
+    r := fmt.Sprintf(":%v NOTICE * :%v\r\n", c.server.Hostname, s)
+    return c.rwc.Write([]byte(r))
+}
+
 // Das server
 type Server struct {
     Hostname string
     UsersByNick map[string] *User
     UsersByUsername map[string] *User
     Connections map[*IrcConn] *User
+    StartedAt time.Time
+    Version string
     // channels map[string] *Channel
 }
 
@@ -36,10 +64,21 @@ func (s *Server) RegisterConnection(u *User) {
 }
 
 func (s *Server) RegisterUser(u *User) {
+    if server.FindUserByName(u.Username) != nil {
+        u.Conn.WriteResponse(ERR["ALREADYREGISTRED"], u.Nick)
+    }
+
     s.UsersByNick[u.Nick] = u
     s.UsersByUsername[u.Username] = u
     s.Connections[u.Conn] = u
     u.Registered = true
+
+    u.Conn.WriteResponse(RPL["WELCOME"].Format(u.FullyQualifiedName()), u.Nick)
+    u.Conn.WriteResponse(RPL["YOURHOST"].Format(s.Hostname, s.Version), u.Nick)
+    u.Conn.WriteResponse(RPL["CREATED"].Format(s.StartedAt), u.Nick)
+    u.Conn.WriteResponse(RPL["MYINFO"].Format(s.Hostname, s.Version, "opsitnmlbvk", "iswo"), u.Nick)
+    u.Conn.WriteResponse(RPL["MOTDSTART"].Format(s.Hostname), u.Nick)
+    u.Conn.WriteResponse(RPL["ENDOFMOTD"], u.Nick)
 }
 
 func (s *Server) ChangeNick(u *User, nick string) ServerResponse {
@@ -83,14 +122,26 @@ func (s *Server) Dispatch(cmds *CmdParser) {
     for c := cmds.Next(); c != nil; c = cmds.Next() {
         log.Printf("Dispatching command %v", *c)
         var response ServerResponse
-        if cmd_func, exists := CmdDispatcher[c.Cmd]; exists {
-            response = cmd_func(c, cmds.Client)
-        } else {
+
+        // Check if command is valid
+        if cmd_func, exists := CmdDispatcher[c.Cmd]; !exists {
             response = ERR["UNKNOWNCOMMAND"]
+        } else {
+            // Check if user is registered if they aren't trying to register
+            if c.Cmd != "NICK" && c.Cmd != "USER" {
+                u := s.FindUserByConn(cmds.Client)
+                if u == nil || !u.Registered {
+                    response = ERR["NOTREGISTERED"]
+                } else {
+                    response = cmd_func(c, cmds.Client)
+                }
+            } else {
+                response = cmd_func(c, cmds.Client)
+            }
         }
 
         if response != nil {
-            cmds.Client.Write([]byte(response.Response(s, c.Cmd)))
+            cmds.Client.WriteResponse(response, c.Cmd)
         }
     }
 }
@@ -101,6 +152,8 @@ func RunServer(listenaddr string) {
     server.UsersByUsername = make(map[string] *User)
     server.Connections = make(map[*IrcConn] *User)
     server.Hostname = "localhost"
+    server.Version = "piRC 0.0.1-alpha1"
+    server.StartedAt = time.Now()
     ln, err := net.Listen("tcp", listenaddr)
     if err != nil {
         log.Println(err)

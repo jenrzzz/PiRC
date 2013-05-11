@@ -25,16 +25,26 @@ func (cp CodePair) Response(s *Server, cmd string) string {
 }
 
 // For replies that need to be formatted with info
-func (cp CodePair) Format(vals ...interface{}) {
-    cp.Msg = fmt.Sprintf(cp.Msg, vals)
+func (cp CodePair) Format(vals ...interface{}) CodePair {
+    ncp := new(CodePair)
+    ncp.Code = cp.Code
+    ncp.Msg = fmt.Sprintf(cp.Msg, vals...)
+    return *ncp
+}
+
+func (cp CodePair) FormatMsg(vals ...interface{}) string {
+    return fmt.Sprintf(cp.Msg, vals...)
 }
 
 // Normal server responses
 var RPL = map[string] CodePair {
-    "WELCOME": CodePair{1, "Welcome to the Internet Relay Chat Network %v!%v@%v"},
+    "WELCOME": CodePair{1, "Welcome to the Internet Relay Chat Network %v"},
     "YOURHOST": CodePair{2, "Your host is %v, running version %v"},
     "CREATED": CodePair{3, "This server was created %v"},
     "MYINFO": CodePair{4, "%v %v %v %v"},
+    "MOTD": CodePair{375, "%v"},
+    "MOTDSTART": CodePair{375, "- %v Message of the day -"},
+    "ENDOFMOTD": CodePair{376, "End of /MOTD command"},
 }
 
 // error codes and messages
@@ -43,6 +53,7 @@ var ERR = map[string] CodePair {
     "NONICKNAMEGIVEN": CodePair{431, "No nickname given"},
     "ERRONEUSNICKNAME": CodePair{432, "Erroneous nickname"},
     "NICKNAMEINUSE": CodePair{433, "Nickname is already in use"},
+    "NOTREGISTERED": CodePair{451, "You have not registered"},
     "NEEDMOREPARAMS": CodePair{461, "Not enough parameters"},
     "ALREADYREGISTRED": CodePair{462, "You may not reregister"},
 }

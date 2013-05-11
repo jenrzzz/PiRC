@@ -58,4 +58,18 @@ var CmdDispatcher = map[string] func(*IrcCmd, *IrcConn) ServerResponse {
         log.Printf("Registered user %v", *u)
         return nil
     },
+
+    "PING": func(cmd *IrcCmd, conn *IrcConn) ServerResponse {
+        if len(cmd.Args) < 1 {
+            return ERR["NEEDMOREPARAMS"]
+        }
+
+        conn.WriteCmd("PONG", nil)
+        return nil
+    },
+
+    "PONG": func(cmd *IrcCmd, conn *IrcConn) ServerResponse {
+        log.Printf("%v is still alive", conn.remoteAddr)
+        return nil
+    },
 }

@@ -1,6 +1,7 @@
 package pirc
 
 import (
+    "fmt"
     "net"
     "log"
 )
@@ -13,6 +14,10 @@ type User struct {
     Servername string
     Registered bool
     Conn *IrcConn
+}
+
+func (u *User) FullyQualifiedName() string {
+    return fmt.Sprintf("%v!%v@%v", u.Nick, u.Username, u.Hostname)
 }
 
 func CreateUser(nick string, c *IrcConn) (*User, error) {
