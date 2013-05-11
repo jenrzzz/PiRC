@@ -20,7 +20,7 @@ func (p CodePair) Error() string {
 
 // ServerResponse interface
 func (cp CodePair) Response(s *Server, cmd string) string {
-    response := fmt.Sprintf(":%v %3d0 %v :%v\r\n", s.Hostname, cp.Code, cmd, cp.Msg)
+    response := fmt.Sprintf(":%v %03d %v :%v\r\n", s.Hostname, cp.Code, cmd, cp.Msg)
     return response
 }
 
@@ -49,7 +49,7 @@ var RPL = map[string] CodePair {
 
 // error codes and messages
 var ERR = map[string] CodePair {
-    "UNKNOWNCOMMAND": CodePair{421, "Unknown command"},
+    "UNKNOWNCOMMAND": CodePair{421, "Unknown command %v"},
     "NONICKNAMEGIVEN": CodePair{431, "No nickname given"},
     "ERRONEUSNICKNAME": CodePair{432, "Erroneous nickname"},
     "NICKNAMEINUSE": CodePair{433, "Nickname is already in use"},

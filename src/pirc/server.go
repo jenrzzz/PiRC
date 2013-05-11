@@ -25,7 +25,7 @@ func (c *IrcConn) Write(b []byte) (n int, err error) {
 }
 
 func (c *IrcConn) WriteRaw(code int, nick string, message string) (n int, err error) {
-    r := fmt.Sprintf(":%v %3d0 %v %v\r\n", c.server.Hostname, code, nick, message)
+    r := fmt.Sprintf(":%v %03d %v %v\r\n", c.server.Hostname, code, nick, message)
     return c.rwc.Write([]byte(r))
 }
 
@@ -120,12 +120,11 @@ func (s *Server) FindUserByConn(c *IrcConn) *User {
 // Check if command is valid and dispatch, then write response
 func (s *Server) Dispatch(cmds *CmdParser) {
     for c := cmds.Next(); c != nil; c = cmds.Next() {
-        log.Printf("Dispatching command %v", *c)
         var response ServerResponse
 
         // Check if command is valid
         if cmd_func, exists := CmdDispatcher[c.Cmd]; !exists {
-            response = ERR["UNKNOWNCOMMAND"]
+            response = ERR["UNKNOWNCOMMAND"].Format(c.Cmd)
         } else {
             // Check if user is registered if they aren't trying to register
             if c.Cmd != "NICK" && c.Cmd != "USER" {
@@ -160,7 +159,7 @@ func RunServer(listenaddr string) {
         log.Panicf("Unable to start a server on %v!", listenaddr)
     }
 
-    // Main connection loop
+    // Connection handler loop
     for {
         log.Println("Waiting for connection")
         conn, err := ln.Accept()
@@ -172,24 +171,35 @@ func RunServer(listenaddr string) {
             log.Println("Connection opened")
         }
 
+        // Connection processor loop
+        // No select(2) -- it's a beautiful thing :D
+        // conn.Read will block in this goroutine until data is received
         go func(conn net.Conn) {
             remote_addr := conn.RemoteAddr().String()
             remote_addr = remote_addr[0:strings.IndexAny(remote_addr, ":")]
             c := IrcConn{conn, remote_addr, server, make([]byte, 2048)}
-            bytes_read, err := conn.Read(c.body[0:])
-            if err != nil {
-                log.Println("Error receiving data.")
-                log.Println(err)
-            } else {
-                log.Printf("Received input of length %d from %v\n", bytes_read, conn.RemoteAddr().String())
-                parser := new(CmdParser)
-                parser.Client = &c
-                err := parser.Parse(c.body[0:bytes_read])
+
+            for {
+                bytes_read, err := conn.Read(c.body[0:])
                 if err != nil {
-                    log.Printf("Command parse error: %v", err.Error())
+                    if err.Error() == "EOF" {
+                        log.Printf("Connection from %v closed.", remote_addr)
+                    } else {
+                        log.Println("Error receiving data.")
+                        log.Println(err)
+                    }
+                    break
                 } else {
-                    server.Dispatch(parser)
+                    parser := new(CmdParser)
+                    parser.Client = &c
+                    err := parser.Parse(c.body[0:bytes_read])
+                    if err != nil {
+                        log.Printf("Command parse error: %v", err.Error())
+                    } else {
+                        server.Dispatch(parser)
+                    }
                 }
+                c.body = make([]byte, 2048)
             }
         }(conn)
     }
