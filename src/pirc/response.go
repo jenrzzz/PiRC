@@ -40,6 +40,9 @@ var RPL = map[string] CodePair {
 // error codes and messages
 var ERR = map[string] CodePair {
     "UNKNOWNCOMMAND": CodePair{421, "Unknown command"},
+    "NONICKNAMEGIVEN": CodePair{431, "No nickname given"},
+    "ERRONEUSNICKNAME": CodePair{432, "Erroneous nickname"},
     "NICKNAMEINUSE": CodePair{433, "Nickname is already in use"},
     "NEEDMOREPARAMS": CodePair{461, "Not enough parameters"},
+    "ALREADYREGISTRED": CodePair{462, "You may not reregister"},
 }
