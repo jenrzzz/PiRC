@@ -5,6 +5,7 @@ import (
     "net"
     "strings"
     "fmt"
+    "github.com/stathat/treap"
     "time"
 )
 
@@ -21,16 +22,22 @@ func (c *IrcConn) Read(b []byte) (n int, err error) {
 }
 
 func (c *IrcConn) Write(b []byte) (n int, err error) {
+    log.Printf("Writing response %v\n", string(b))
     return c.rwc.Write(b)
 }
 
 func (c *IrcConn) WriteRaw(code int, nick string, message string) (n int, err error) {
     r := fmt.Sprintf(":%v %03d %v %v\r\n", c.server.Hostname, code, nick, message)
-    return c.rwc.Write([]byte(r))
+    return c.Write([]byte(r))
 }
 
 func (c *IrcConn) WriteResponse(r ServerResponse, cmd string) (n int, err error) {
-    return c.rwc.Write([]byte(r.Response(c.server, cmd)))
+    return c.Write([]byte(r.Response(c.server, cmd)))
+}
+
+func (c *IrcConn) WriteFormattedResponse(s *Server, code int, nick string, resp string) (n int, err error) {
+    response := fmt.Sprintf(":%v %03d %v %v\r\n", s.Hostname, code, nick, resp)
+    return c.Write([]byte(response))
 }
 
 func (c *IrcConn) WriteCmd(cmd string, args []string) (n int, err error) {
@@ -40,12 +47,32 @@ func (c *IrcConn) WriteCmd(cmd string, args []string) (n int, err error) {
     } else {
         r = fmt.Sprintf(":%v %v\r\n", c.server.Hostname, cmd)
     }
-    return c.rwc.Write([]byte(r))
+    return c.Write([]byte(r))
 }
 
 func (c *IrcConn) WriteServerNotice(s string) (n int, err error) {
     r := fmt.Sprintf(":%v NOTICE * :%v\r\n", c.server.Hostname, s)
-    return c.rwc.Write([]byte(r))
+    return c.Write([]byte(r))
+}
+
+// Comparator for treap
+func StrLess(p, q interface{}) bool {
+    a, b := p.(string), q.(string)
+    var min = len(b)
+    if len(a) < len(b) {
+        min = len(a)
+    }
+
+    var diff int
+    for i := 0; i < min && diff == 0; i++ {
+        diff = int(a[i]) - int(b[i])
+    }
+
+    if diff == 0 {
+        diff = len(a) - len(b)
+    }
+
+    return diff < 0
 }
 
 // Das server
@@ -56,12 +83,20 @@ type Server struct {
     Connections map[*IrcConn] *User
     StartedAt time.Time
     Version string
-    // channels map[string] *Channel
+    Channels *treap.Tree
 }
 
 func (s *Server) RegisterConnection(u *User) {
     s.Connections[u.Conn] = u
 }
+
+func (s *Server) UnregisterConnection(c *IrcConn) {
+    u := s.FindUserByConn(c)
+    delete(s.Connections, c)
+    delete(s.UsersByNick, u.Nick)
+    delete(s.UsersByUsername, u.Username)
+}
+
 
 func (s *Server) RegisterUser(u *User) {
     if server.FindUserByName(u.Username) != nil {
@@ -73,6 +108,7 @@ func (s *Server) RegisterUser(u *User) {
     s.Connections[u.Conn] = u
     u.Registered = true
 
+    // Write connection banner
     u.Conn.WriteResponse(RPL["WELCOME"].Format(u.FullyQualifiedName()), u.Nick)
     u.Conn.WriteResponse(RPL["YOURHOST"].Format(s.Hostname, s.Version), u.Nick)
     u.Conn.WriteResponse(RPL["CREATED"].Format(s.StartedAt), u.Nick)
@@ -150,6 +186,7 @@ func RunServer(listenaddr string) {
     server.UsersByNick = make(map[string] *User)
     server.UsersByUsername = make(map[string] *User)
     server.Connections = make(map[*IrcConn] *User)
+    server.Channels = treap.NewTree(StrLess)
     server.Hostname = "localhost"
     server.Version = "piRC 0.0.1-alpha1"
     server.StartedAt = time.Now()
@@ -188,6 +225,7 @@ func RunServer(listenaddr string) {
                         log.Println("Error receiving data.")
                         log.Println(err)
                     }
+                    server.UnregisterConnection(&c)
                     break
                 } else {
                     parser := new(CmdParser)

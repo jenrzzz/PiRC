@@ -11,6 +11,7 @@ type IrcCmd struct {
     Cmd string
     Args []string
     Sender string
+    Raw string
 }
 
 type CmdParser struct {
@@ -92,6 +93,7 @@ func (parser *CmdParser) Parse(buf []byte) error {
             Cmd: strings.ToUpper(parsed_cmds[0]),
             Args: parsed_cmds[1:],
             Sender: sender,
+            Raw: c,
         }
 
         parser.commands[i] = &irc_cmd
