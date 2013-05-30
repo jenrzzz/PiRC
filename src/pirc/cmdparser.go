@@ -72,7 +72,10 @@ func (parser *CmdParser) Parse(buf []byte) error {
         }
 
         split_cmds := strings.Split(stripped_cmd, " ")
-        parsed_cmds := make([]string, 32)[0:len(split_cmds)]
+        if len(split_cmds) > 1024 {
+          return nil
+        }
+        parsed_cmds := make([]string, 1024)[0:len(split_cmds)]
 
         // Check if the last command starts with a colon (allows spaces), and
         // join those args together

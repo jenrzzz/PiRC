@@ -53,7 +53,11 @@ var RPL = map[string] CodePair {
 
 // error codes and messages
 var ERR = map[string] CodePair {
+    "NOSUCHNICK": CodePair{401, "No such nick/channel"},
     "NOSUCHCHANNEL": CodePair{403, "No such channel"},
+    "CANNOTSENDTOCHAN": CodePair{404, "Cannot send to channel"},
+    "NORECIPIENT": CodePair{411, "No recipient given %v"},
+    "NOTEXTTOSEND": CodePair{412, "No text to send"},
     "UNKNOWNCOMMAND": CodePair{421, "Unknown command %v"},
     "NONICKNAMEGIVEN": CodePair{431, "No nickname given"},
     "ERRONEUSNICKNAME": CodePair{432, "Erroneous nickname"},

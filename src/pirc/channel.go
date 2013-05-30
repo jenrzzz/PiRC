@@ -28,29 +28,39 @@ func (c *Channel) UserJoin(u *User) {
 }
 
 func (c *Channel) UserPart(u *User) {
-    i := 0
+    // Check if user is in channel and find the index in the slice
+    index := 0
     found := false
-    for j, cu := range c.Users {
-        i = j
+    for i, cu := range c.Users[0:] {
+        index = i
         if cu == u {
             found = true
             break
         }
     }
 
+    // Delete user from channel list
     if found {
-        u1 := c.Users[:i]
-        u2 := c.Users[i+1:]
-        c.Users = make([]*User, 2 * (len(u1) + len(u2)))
-        copy(c.Users, u1)
-        copy(c.Users[len(u1):], u2)
+        if index == (len(c.Users) - 1) {
+            c.Users = c.Users[:index]
+        } else {
+            c.Users = append(c.Users[:index], c.Users[index+1])
+        }
         c.UserCount -= 1
     }
 }
 
-func (c *Channel) BroadcastClientCmd(u *User, cmd string) {
-    r := fmt.Sprintf(":%v!%v@%v %v\r\n", u.Nick, u.Username, u.Hostname, cmd)
+func (c *Channel) BroadcastClientCmd(sender *User, cmd string) {
+    r := fmt.Sprintf(":%v!%v@%v %v\r\n", sender.Nick, sender.Username, sender.Hostname, cmd)
     for _, u := range c.Users {
+        u.Conn.Write([]byte(r))
+    }
+}
+
+func (c *Channel) BroadcastClientCmdNoOrig(sender *User, cmd string) {
+    r := fmt.Sprintf(":%v!%v@%v %v\r\n", sender.Nick, sender.Username, sender.Hostname, cmd)
+    for _, u := range c.Users {
+        if u == sender { continue }
         u.Conn.Write([]byte(r))
     }
 }
@@ -67,29 +77,11 @@ func (c *Channel) InChannel(u *User) bool {
 
 func (c *Channel) Names(current *User) string {
     var s []string
-    if current != nil {
-        if len(c.Users) == 0 {
-            return "@" + current.Nick
-        }
-        s = make([]string, c.UserCount + 1)
-    } else {
-        s = make([]string, c.UserCount)
+    for _, cu := range c.Users {
+        s = append(s, cu.Nick)
     }
 
-    for _, u := range c.Users {
-        if u != nil {
-            s = append(s, u.Nick)
-        }
-    }
-
-    if current != nil {
-        s[c.UserCount] = current.Nick
-        return strings.Join(s[0:c.UserCount+1], " ")
-    } else {
-        return strings.Join(s[0:c.UserCount], " ")
-    }
-
-    return ""
+    return strings.Join(s[0:], " ")
 }
 
 

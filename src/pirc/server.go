@@ -22,7 +22,6 @@ func (c *IrcConn) Read(b []byte) (n int, err error) {
 }
 
 func (c *IrcConn) Write(b []byte) (n int, err error) {
-    log.Printf("Writing response %v\n", string(b))
     return c.rwc.Write(b)
 }
 
@@ -33,6 +32,11 @@ func (c *IrcConn) WriteRaw(code int, nick string, message string) (n int, err er
 
 func (c *IrcConn) WriteResponse(r ServerResponse, cmd string) (n int, err error) {
     return c.Write([]byte(r.Response(c.server, cmd)))
+}
+
+func (c *IrcConn) WriteDirectUser(u *User, cmd string)  {
+    r := fmt.Sprintf(":%v!%v@%v %v\r\n", u.Nick, u.Username, u.Hostname, cmd)
+    u.Conn.Write([]byte(r))
 }
 
 func (c *IrcConn) WriteFormattedResponse(s *Server, code int, nick string, resp string) (n int, err error) {
@@ -122,8 +126,6 @@ func (s *Server) ChangeNick(u *User, nick string) ServerResponse {
         return ERR["NICKNAMEINUSE"]
     }
 
-    log.Printf("User %v changed nick from %v to %v", u.Username, u.Nick, nick)
-
     // Delete the old nick if we're changing it
     delete(server.UsersByNick, u.Nick)
     u.Nick = nick
@@ -198,7 +200,6 @@ func RunServer(listenaddr string) {
 
     // Connection handler loop
     for {
-        log.Println("Waiting for connection")
         conn, err := ln.Accept()
         if err != nil {
             log.Println("Error opening connection.")

@@ -140,4 +140,47 @@ var CmdDispatcher = map[string] func(*IrcCmd, *IrcConn) ServerResponse {
 
         return nil
     },
+
+    "PRIVMSG": func(cmd *IrcCmd, conn *IrcConn) ServerResponse {
+        if len(cmd.Args) < 1{
+            return ERR["NORECIPIENT"].Format(cmd.Cmd)
+        }
+
+        if len(cmd.Args) < 2{
+            return ERR["NOTEXTTOSEND"]
+        }
+
+        u := server.FindUserByConn(conn)
+        // Channel message
+        if cmd.Args[0][0] == '#' {
+            channel := server.Channels.Get(cmd.Args[0]).(*Channel)
+            if channel == nil || ! channel.InChannel(u) {
+                return ERR["CANNOTSENDTOCHAN"]
+            }
+            channel.BroadcastClientCmdNoOrig(u, cmd.Raw)
+            return nil
+        }
+
+        // Private message
+        rcpt := server.FindUserByNick(cmd.Args[0])
+        if rcpt == nil {
+            return ERR["NOSUCHNICK"]
+        }
+
+        rcpt.Conn.WriteDirectUser(u, cmd.Raw)
+        return nil
+    },
+
+    "QUIT": func(cmd *IrcCmd, conn *IrcConn) ServerResponse {
+        u := server.FindUserByConn(conn)
+        for _, c := range u.Channels {
+            c.BroadcastClientCmd(u, cmd.Raw)
+            c.UserPart(u)
+        }
+        delete(server.UsersByNick, u.Nick)
+        delete(server.UsersByUsername, u.Username)
+        delete(server.Connections, conn)
+        u.Conn.rwc.Close()
+        return nil
+    },
 }
